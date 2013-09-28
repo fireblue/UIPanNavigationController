@@ -66,7 +66,6 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
     panGesture.cancelsTouchesInView = YES;
     panGesture.delegate = self;
     [self.view addGestureRecognizer:panGesture];
-    BP_RELEASE(panGesture);
 }
 
 
@@ -101,7 +100,7 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
 }
 
 - (IBAction)handlePan:(UIPanGestureRecognizer *)gestureRecognizer {
-
+	
     if ([gestureRecognizer state] == UIGestureRecognizerStateBegan)
     {
         [self.view endEditing:YES];
@@ -112,9 +111,9 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
         [self touchesMovedWithPanGesture:gestureRecognizer];
     }
     else if (gestureRecognizer.state == UIGestureRecognizerStateEnded
-               || gestureRecognizer.state == UIGestureRecognizerStateFailed
-               || gestureRecognizer.state == UIGestureRecognizerStateCancelled
-               || gestureRecognizer.state == UIGestureRecognizerStateCancelled)
+			 || gestureRecognizer.state == UIGestureRecognizerStateFailed
+			 || gestureRecognizer.state == UIGestureRecognizerStateCancelled
+			 || gestureRecognizer.state == UIGestureRecognizerStateCancelled)
     {
         [self touchesEnded];
     }
@@ -127,7 +126,13 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
     if ([self.viewControllers count]> 0 && [viewController respondsToSelector:@selector(isSupportPanPop)]) {
         BOOL returnValue = ((BOOL (*)(id, SEL))objc_msgSend)(viewController, @selector(isSupportPanPop));
         if (returnValue) {
-            UIImage *image = [UIImage imageFromUIView:self.view];
+            UIImage *image = nil;
+			if (self.tabBarController != nil) {
+				image = [UIImage imageFromUIView:self.tabBarController.view];
+			}
+			else {
+				image = [UIImage imageFromUIView:self.view];
+            }
             //every controller should maintain its own snapshot
             [self saveSnapshot:image forViewController:self.topViewController];
         }
@@ -163,21 +168,23 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
 }
 
 
-#pragma mark - 
+#pragma mark -
 #pragma mark - Touch Action
 - (void)touchesBegan {
-    NSInteger topControllerIndex = [self.viewControllers indexOfObject:self.topViewController];
-    if (topControllerIndex == 0)
-        return;
-    
-    [self.topViewController.view setHidden:YES];
-    
-    UIViewController* leftController = [self.viewControllers objectAtIndex: topControllerIndex-1];
-    UIImage* leftImage = [self snapshotForViewController:leftController];
-    UIImage* centerImage = [self snapshotForViewController:self.topViewController];
-    
-    [self showMaskViewsWithImageLeft:leftImage imageCenter:centerImage];
-    [self maskViewConfigWithScale:kTransformScale left:0 alpha:kOverlayViewAlpha];
+	if ([self isNeedPanResponse]) {
+		NSInteger topControllerIndex = [self.viewControllers indexOfObject:self.topViewController];
+		if (topControllerIndex == 0)
+			return;
+		
+		//[self.topViewController.view setHidden:YES];
+		
+		UIViewController* leftController = [self.viewControllers objectAtIndex: topControllerIndex-1];
+		UIImage* leftImage = [self snapshotForViewController:leftController];
+		UIImage* centerImage = [self snapshotForViewController:self.topViewController];
+		
+		[self showMaskViewsWithImageLeft:leftImage imageCenter:centerImage];
+		[self maskViewConfigWithScale:kTransformScale left:0 alpha:kOverlayViewAlpha];
+	}
 }
 
 - (void)touchesEnded {
@@ -191,7 +198,7 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
 }
 
 - (void)touchesMovedWithPanGesture:(UIPanGestureRecognizer *)gestureRecognizer {
-
+	
     CGPoint point = [gestureRecognizer translationInView:self.view];
     CGRect frame = _centerSnapshotView.frame;
     frame.origin.x = point.x > 0 ? point.x : 0;
@@ -277,11 +284,11 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
     }];
 }
 
-#pragma mark - 
+#pragma mark -
 #pragma mark - snapshot
 - (void)saveSnapshot:(UIImage *)image forViewController:(UIViewController *)controller {
 #if CACHE_IN_MEMORY
-    [controller setAssociativeObject:image forKey:snapShotKey];    
+    [controller setAssociativeObject:image forKey:snapShotKey];
 #else
     NSString *snapshotPath = [self snapshotPathForController:controller];
     
@@ -302,7 +309,7 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
     UIImage *image = [UIImage imageWithContentsOfFile:snapshotPath];
     return image;
 #endif
-
+	
 }
 
 - (void)removeSnapshotForViewController:(UIViewController *)controller {
@@ -317,7 +324,7 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
     NSString *snapshotPath = [self snapshotPathForController:controller];
     [[NSFileManager defaultManager] removeItemAtPath:snapshotPath error:nil];
 #endif
-
+	
 }
 
 - (NSString *)snapshotPathForController:(UIViewController *)controller {
@@ -334,35 +341,35 @@ static NSString *const snapShotViewKey = @"snapShotViewKey";
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
-    {
-
-        if ([touch.view isKindOfClass:[UITableViewCell class]]) {
-            return NO;
-        }
-        
-        if (![self isNeedPanResponse]) {
-            return NO;
-        }
-        
-        if ([self.topViewController.view isKindOfClass:[UITableView class]]) {
-            UITableView* tableView = (UITableView*) self.topViewController.view;
-            if([tableView isDecelerating]||[tableView isDragging])
-                return NO;
-        }
-        
-        for (UIView *subview in self.topViewController.view.subviews)
-        {
-            if ([subview isKindOfClass:[UITableView class]]) {
-                UITableView* tableView = (UITableView*) subview;
-                if([tableView isDecelerating]||[tableView isDragging])
-                    return NO;
-            }
-        }
-        
-        UIImage *image = [UIImage imageFromUIView:self.view];
-        [self saveSnapshot:image forViewController:self.topViewController];
-        
-        return YES;
+{
+	
+	if ([touch.view isKindOfClass:[UITableViewCell class]]) {
+		return NO;
+	}
+	
+	if (![self isNeedPanResponse]) {
+		return NO;
+	}
+	
+	if ([self.topViewController.view isKindOfClass:[UITableView class]]) {
+		UITableView* tableView = (UITableView*) self.topViewController.view;
+		if([tableView isDecelerating]||[tableView isDragging])
+			return NO;
+	}
+	
+	for (UIView *subview in self.topViewController.view.subviews)
+	{
+		if ([subview isKindOfClass:[UITableView class]]) {
+			UITableView* tableView = (UITableView*) subview;
+			if([tableView isDecelerating]||[tableView isDragging])
+				return NO;
+		}
+	}
+	
+	UIImage *image = [UIImage imageFromUIView:self.view];
+	[self saveSnapshot:image forViewController:self.topViewController];
+	
+	return YES;
 }
 
 

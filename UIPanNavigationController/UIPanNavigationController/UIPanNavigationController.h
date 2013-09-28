@@ -15,6 +15,8 @@
 
 @interface UIPanNavigationController : UINavigationController
 
+@property (nonatomic) BOOL customAnimations;
+
 + (NSString *)snapshotCachePath;
 
 @end
